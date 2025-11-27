@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-light p-5 rounded">
+            <h1 class="display-4"><i class="fas fa-fingerprint text-primary"></i> AutoAttendance</h1>
+            <p class="lead">Advanced attendance system using face recognition and voice verification for secure and automated attendance tracking.</p>
+            <hr class="my-4">
+            <p>Register students once and mark attendance effortlessly with dual-factor authentication.</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Statistics Cards -->
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_students or 0 }}</h4>
+                        <p class="card-text">Total Students</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ today_attendance or 0 }}</h4>
+                        <p class="card-text">Present Today</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ "%0.1f"|format((today_attendance / total_students * 100) if total_students else 0) }}%</h4>
+                        <p class="card-text">Today's Rate</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Quick Actions -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-rocket"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('register_student') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-user-plus"></i> Register New Student
+                    </a>
+                    <a href="{{ url_for('mark_attendance') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-check-circle"></i> Mark Attendance
+                    </a>
+                    <a href="{{ url_for('reports') }}" class="btn btn-info btn-lg">
+                        <i class="fas fa-chart-bar"></i> View Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Activity -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-clock"></i> Recent Attendance</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_attendance %}
+                    <div class="list-group">
+                        {% for record in recent_attendance %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">{{ record.name }}</h6>
+                                    <small>{{ record.timestamp.strftime('%H:%M') }}</small>
+                                </div>
+                                <small class="text-muted">{{ record.timestamp.strftime('%b %d, %Y') }}</small>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No recent attendance records.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-info-circle"></i> How It Works</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-user-plus fa-2x text-primary mb-3"></i>
+                            <h5>1. Register</h5>
+                            <p class="text-muted">Register students with face and voice samples</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-camera fa-2x text-success mb-3"></i>
+                            <h5>2. Face Scan</h5>
+                            <p class="text-muted">Real-time face recognition for identity verification</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-microphone fa-2x text-warning mb-3"></i>
+                            <h5>3. Voice Verify</h5>
+                            <p class="text-muted">Voice verification for additional security</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-chart-bar fa-2x text-info mb-3"></i>
+                            <h5>4. Get Reports</h5>
+                            <p class="text-muted">Automated NLP reports and analytics</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

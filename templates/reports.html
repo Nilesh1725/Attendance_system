@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="card-title mb-0"><i class="fas fa-chart-bar"></i> Attendance Reports & Analytics</h4>
+                <button class="btn btn-outline-primary" onclick="window.location.reload()">
+                    <i class="fas fa-sync-alt"></i> Refresh Report
+                </button>
+            </div>
+            <div class="card-body">
+                {% if report_text %}
+                    <div class="report-container bg-light p-4 rounded">
+                        <pre class="report-text" style="white-space: pre-wrap; font-family: 'Courier New', monospace; line-height: 1.4;">{{ report_text }}</pre>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button class="btn btn-success" onclick="downloadReport()">
+                            <i class="fas fa-download"></i> Download Report
+                        </button>
+                        <button class="btn btn-info" onclick="printReport()">
+                            <i class="fas fa-print"></i> Print Report
+                        </button>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No report data available. Generate a new report to view analytics.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Analytics -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-users"></i> Student Management</h5>
+            </div>
+            <div class="card-body">
+                <div id="studentsList" class="text-center">
+                    <i class="fas fa-spinner fa-spin"></i> Loading students...
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-question-circle"></i> Report Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle"></i> About This Report</h6>
+                    <p class="mb-2">This report provides:</p>
+                    <ul class="mb-0">
+                        <li>Real-time attendance analytics</li>
+                        <li>Student performance tracking</li>
+                        <li>Weekly attendance trends</li>
+                        <li>Automated recommendations</li>
+                        <li>NLP-generated insights</li>
+                    </ul>
+                </div>
+                <p class="text-muted small">
+                    Reports are generated automatically and include data from the last 30 days.
+                    Refresh to get the latest analytics.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function downloadReport() {
+        const reportText = `{{ report_text }}`;
+        const blob = new Blob([reportText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance-report-${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function printReport() {
+        window.print();
+    }
+
+    // Load students list
+    async function loadStudents() {
+        try {
+            const response = await fetch('/api/students');
+            const students = await response.json();
+            
+            const studentsList = document.getElementById('studentsList');
+            
+            if (students.length > 0) {
+                let html = `<p class="text-muted">Total Registered: ${students.length} students</p>`;
+                html += '<div class="list-group">';
+                
+                students.slice(0, 5).forEach(student => {
+                    const date = new Date(student.created_at).toLocaleDateString();
+                    html += `
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${student.name}</h6>
+                                <small>${date}</small>
+                            </div>
+                            <small class="text-muted">ID: ${student.id}</small>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                
+                if (students.length > 5) {
+                    html += `<p class="text-muted mt-2">... and ${students.length - 5} more students</p>`;
+                }
+                
+                studentsList.innerHTML = html;
+            } else {
+                studentsList.innerHTML = '<p class="text-muted">No students registered yet.</p>';
+            }
+        } catch (error) {
+            console.error('Error loading students:', error);
+            document.getElementById('studentsList').innerHTML = '<p class="text-danger">Error loading students</p>';
+        }
+    }
+
+    // Load students when page loads
+    document.addEventListener('DOMContentLoaded', loadStudents);
+</script>
+
+<style>
+    @media print {
+        .navbar, .card-header button, .btn, footer {
+            display: none !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .report-container {
+            background: white !important;
+            border: 1px solid #000 !important;
+        }
+    }
+    
+    .report-text {
+        font-size: 0.9em;
+    }
+</style>
+{% endblock %}

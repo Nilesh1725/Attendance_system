@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0"><i class="fas fa-check-circle"></i> Mark Attendance</h4>
+            </div>
+            <div class="card-body">
+                <!-- Browser Support Check -->
+                <div id="browserSupport" class="alert alert-info" style="display: none;">
+                    <i class="fas fa-info-circle"></i> 
+                    <span id="supportMessage">Checking browser compatibility...</span>
+                </div>
+
+                <p class="text-muted mb-4">Position your face clearly and say your name when prompted for dual verification. Make sure to allow camera and microphone access.</p>
+                
+                <!-- Face Capture Section -->
+                <div class="mb-4">
+                    <h5><i class="fas fa-camera"></i> Face Verification</h5>
+                    
+                    <div class="camera-container mb-3">
+                        <div id="cameraPlaceholder" class="camera-placeholder">
+                            <i class="fas fa-camera fa-3x text-muted"></i>
+                            <p class="mt-2 text-muted">Camera preview will appear here</p>
+                        </div>
+                        <video id="video" autoplay playsinline class="w-100 rounded border" style="max-height: 400px; display: none;"></video>
+                        <canvas id="canvas" style="display: none;"></canvas>
+                    </div>
+
+                    <div class="mb-3">
+                        <button type="button" id="startCamera" class="btn btn-outline-primary">
+                            <i class="fas fa-camera"></i> Start Camera
+                        </button>
+                        <button type="button" id="captureFace" class="btn btn-success" disabled>
+                            <i class="fas fa-camera-retro"></i> Capture Face
+                        </button>
+                        <button type="button" id="stopCamera" class="btn btn-outline-danger" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Camera
+                        </button>
+                    </div>
+
+                    <div id="facePreview" class="text-center" style="display: none;">
+                        <p class="text-success"><i class="fas fa-check-circle"></i> Face captured successfully!</p>
+                        <img id="facePreviewImg" class="img-thumbnail" style="max-width: 200px;">
+                    </div>
+
+                    <div id="cameraError" class="alert alert-danger mt-2" style="display: none;"></div>
+                </div>
+
+                <!-- Voice Verification Section -->
+                <div class="mb-4">
+                    <h5><i class="fas fa-microphone"></i> Voice Verification</h5>
+                    <p class="text-muted">Click record and clearly state your full name.</p>
+                    
+                    <div class="mb-3">
+                        <button type="button" id="recordVoice" class="btn btn-outline-warning">
+                            <i class="fas fa-microphone"></i> Record Name
+                        </button>
+                        <button type="button" id="stopRecording" class="btn btn-outline-danger" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Recording
+                        </button>
+                        <span id="recordingStatus" class="badge bg-danger ms-2" style="display: none;">
+                            <i class="fas fa-circle"></i> Recording...
+                        </span>
+                    </div>
+
+                    <audio id="audioPlayback" controls class="w-100 mt-2" style="display: none;"></audio>
+                    
+                    <div id="voicePreview" class="text-center mt-2" style="display: none;">
+                        <p class="text-success"><i class="fas fa-check-circle"></i> Voice recorded successfully!</p>
+                    </div>
+
+                    <div id="microphoneError" class="alert alert-danger mt-2" style="display: none;"></div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="button" id="submitAttendance" class="btn btn-primary btn-lg w-100" disabled>
+                    <i class="fas fa-check-double"></i> Verify & Mark Attendance
+                </button>
+
+                <div id="attendanceResult" class="mt-3"></div>
+
+                <!-- Confidence Meter -->
+                <div id="confidenceMeter" class="mt-3" style="display: none;">
+                    <div class="progress" style="height: 20px;">
+                        <div id="confidenceBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    <small class="text-muted" id="confidenceText">Verification confidence</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    class AttendanceSystem {
+        constructor() {
+            this.video = document.getElementById('video');
+            this.canvas = document.getElementById('canvas');
+            this.ctx = this.canvas.getContext('2d');
+            this.stream = null;
+            this.audioChunks = [];
+            this.mediaRecorder = null;
+            this.capturedImageData = null;
+            this.audioBlob = null;
+            
+            this.initializeEventListeners();
+            this.checkInitialSupport();
+        }
+
+        initializeEventListeners() {
+            document.getElementById('startCamera').addEventListener('click', () => this.startCamera());
+            document.getElementById('captureFace').addEventListener('click', () => this.captureFace());
+            document.getElementById('stopCamera').addEventListener('click', () => this.stopCamera());
+            document.getElementById('recordVoice').addEventListener('click', () => this.startRecording());
+            document.getElementById('stopRecording').addEventListener('click', () => this.stopRecording());
+            document.getElementById('submitAttendance').addEventListener('click', () => this.submitAttendance());
+        }
+
+        async checkInitialSupport() {
+            const support = await MediaUtils.checkMediaSupport();
+            
+            if (!support.https && (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')) {
+                this.showCameraError('Camera/Microphone access requires HTTPS. Please use HTTPS for full functionality.');
+                this.showMicrophoneError('Camera/Microphone access requires HTTPS. Please use HTTPS for full functionality.');
+                document.getElementById('startCamera').disabled = true;
+                document.getElementById('recordVoice').disabled = true;
+            }
+            
+            if (!support.camera) {
+                this.showCameraError('Camera not supported or access denied. Please check browser permissions.');
+                document.getElementById('startCamera').disabled = true;
+            }
+            
+            if (!support.microphone) {
+                this.showMicrophoneError('Microphone not supported or access denied. Please check browser permissions.');
+                document.getElementById('recordVoice').disabled = true;
+            }
+        }
+
+        async startCamera() {
+            try {
+                this.showCameraError('');
+                document.getElementById('startCamera').disabled = true;
+                document.getElementById('startCamera').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+
+                // Stop any existing stream first
+                if (this.stream) {
+                    MediaUtils.stopStream(this.stream);
+                }
+
+                this.stream = await MediaUtils.getCameraStream();
+                
+                this.video.srcObject = this.stream;
+                document.getElementById('captureFace').disabled = false;
+                document.getElementById('startCamera').style.display = 'none';
+                document.getElementById('stopCamera').style.display = 'inline-block';
+                document.getElementById('cameraPlaceholder').style.display = 'none';
+                this.video.style.display = 'block';
+                document.getElementById('startCamera').innerHTML = '<i class="fas fa-camera"></i> Start Camera';
+                
+                console.log('✅ Camera access granted');
+                
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                this.handleCameraError(err);
+            }
+        }
+
+        stopCamera() {
+            if (this.stream) {
+                MediaUtils.stopStream(this.stream);
+                this.stream = null;
+            }
+            this.video.srcObject = null;
+            document.getElementById('startCamera').style.display = 'inline-block';
+            document.getElementById('stopCamera').style.display = 'none';
+            document.getElementById('startCamera').disabled = false;
+            document.getElementById('captureFace').disabled = true;
+            this.video.style.display = 'none';
+            document.getElementById('cameraPlaceholder').style.display = 'block';
+        }
+
+        captureFace() {
+            if (!this.stream) {
+                this.showCameraError('Camera is not active. Please start the camera first.');
+                return;
+            }
+
+            this.canvas.width = this.video.videoWidth;
+            this.canvas.height = this.video.videoHeight;
+            this.ctx.drawImage(this.video, 0, 0);
+            
+            this.capturedImageData = this.canvas.toDataURL('image/jpeg');
+            
+            // Show preview
+            document.getElementById('facePreviewImg').src = this.capturedImageData;
+            document.getElementById('facePreview').style.display = 'block';
+            
+            this.updateSubmitButton();
+        }
+
+        async startRecording() {
+            try {
+                this.showMicrophoneError('');
+                document.getElementById('recordVoice').disabled = true;
+                document.getElementById('recordVoice').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+
+                // Stop any existing recording
+                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    this.mediaRecorder.stop();
+                }
+
+                const audioStream = await MediaUtils.getMicrophoneStream();
+                
+                // Try to use WAV format first for better compatibility
+                const options = { mimeType: 'audio/wav' };
+                try {
+                    this.mediaRecorder = new MediaRecorder(audioStream, options);
+                    console.log('✅ Using WAV format for recording');
+                } catch (e) {
+                    console.warn('WAV format not supported, trying WebM with WAV codec');
+                    try {
+                        // Try WebM with WAV codec
+                        const webmOptions = { mimeType: 'audio/webm; codecs=1' };
+                        this.mediaRecorder = new MediaRecorder(audioStream, webmOptions);
+                    } catch (e2) {
+                        console.warn('WebM with WAV codec not supported, using default format');
+                        this.mediaRecorder = new MediaRecorder(audioStream);
+                    }
+                }
+                
+                this.audioChunks = [];
+                
+                this.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        this.audioChunks.push(event.data);
+                        console.log('Audio data received:', event.data.size, 'bytes');
+                    }
+                };
+                
+                this.mediaRecorder.onstop = () => {
+                    // Determine the blob type based on what format was used
+                    let blobType = 'audio/wav';
+                    if (this.mediaRecorder.mimeType && this.mediaRecorder.mimeType.includes('webm')) {
+                        blobType = 'audio/webm';
+                    }
+                    
+                    this.audioBlob = new Blob(this.audioChunks, { type: blobType });
+                    console.log('Audio recording completed:', this.audioBlob.size, 'bytes, type:', blobType);
+                    
+                    const audioUrl = URL.createObjectURL(this.audioBlob);
+                    const audioPlayback = document.getElementById('audioPlayback');
+                    audioPlayback.src = audioUrl;
+                    audioPlayback.style.display = 'block';
+                    
+                    document.getElementById('recordingStatus').style.display = 'none';
+                    document.getElementById('voicePreview').style.display = 'block';
+                    document.getElementById('recordVoice').style.display = 'inline-block';
+                    document.getElementById('stopRecording').style.display = 'none';
+                    document.getElementById('recordVoice').disabled = false;
+                    document.getElementById('recordVoice').innerHTML = '<i class="fas fa-microphone"></i> Record Name';
+                    this.updateSubmitButton();
+                    
+                    // Stop audio stream
+                    MediaUtils.stopStream(audioStream);
+                };
+                
+                this.mediaRecorder.start();
+                document.getElementById('recordingStatus').style.display = 'inline';
+                document.getElementById('recordVoice').style.display = 'none';
+                document.getElementById('stopRecording').style.display = 'inline-block';
+                document.getElementById('recordVoice').innerHTML = '<i class="fas fa-microphone"></i> Record Name';
+                
+                console.log('🎤 Recording started with format:', this.mediaRecorder.mimeType);
+                
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                this.handleMicrophoneError(err);
+            }
+        }
+
+        stopRecording() {
+            if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                this.mediaRecorder.stop();
+                console.log('🛑 Recording stopped');
+            }
+        }
+
+        updateSubmitButton() {
+            const submitBtn = document.getElementById('submitAttendance');
+            submitBtn.disabled = !(this.capturedImageData && this.audioBlob);
+        }
+
+        handleCameraError(error) {
+            this.showCameraError(error.message);
+            document.getElementById('startCamera').disabled = false;
+            document.getElementById('startCamera').innerHTML = '<i class="fas fa-camera"></i> Start Camera';
+        }
+
+        handleMicrophoneError(error) {
+            this.showMicrophoneError(error.message);
+            document.getElementById('recordVoice').disabled = false;
+            document.getElementById('recordVoice').innerHTML = '<i class="fas fa-microphone"></i> Record Name';
+        }
+
+        showCameraError(message) {
+            const errorDiv = document.getElementById('cameraError');
+            if (message) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+            } else {
+                errorDiv.style.display = 'none';
+            }
+        }
+
+        showMicrophoneError(message) {
+            const errorDiv = document.getElementById('microphoneError');
+            if (message) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+            } else {
+                errorDiv.style.display = 'none';
+            }
+        }
+
+        async submitAttendance() {
+            const submitBtn = document.getElementById('submitAttendance');
+            const resultDiv = document.getElementById('attendanceResult');
+            const confidenceMeter = document.getElementById('confidenceMeter');
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+            resultDiv.innerHTML = '<div class="alert alert-info">Verifying identity...</div>';
+            confidenceMeter.style.display = 'block';
+            
+            try {
+                const formData = new FormData();
+                formData.append('face_image_data', this.capturedImageData);
+                
+                // Use the correct file extension based on blob type
+                let fileExtension = 'wav';
+                if (this.audioBlob.type.includes('webm')) {
+                    fileExtension = 'webm';
+                }
+                formData.append('voice_data', this.audioBlob, `attendance_voice.${fileExtension}`);
+                
+                console.log('📤 Submitting attendance data...');
+                console.log('Face data size:', this.capturedImageData.length, 'chars');
+                console.log('Audio data size:', this.audioBlob.size, 'bytes');
+                console.log('Audio type:', this.audioBlob.type);
+                
+                const response = await fetch('/mark_attendance', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="alert alert-success">${result.message}</div>`;
+                    
+                    // Update confidence meter
+                    if (result.confidence) {
+                        const confidencePercent = Math.round(result.confidence * 100);
+                        const confidenceBar = document.getElementById('confidenceBar');
+                        confidenceBar.style.width = `${confidencePercent}%`;
+                        confidenceBar.textContent = `${confidencePercent}%`;
+                        
+                        // Color coding based on confidence
+                        if (confidencePercent >= 80) {
+                            confidenceBar.classList.remove('bg-warning', 'bg-danger');
+                            confidenceBar.classList.add('bg-success');
+                        } else if (confidencePercent >= 60) {
+                            confidenceBar.classList.remove('bg-success', 'bg-danger');
+                            confidenceBar.classList.add('bg-warning');
+                        } else {
+                            confidenceBar.classList.remove('bg-success', 'bg-warning');
+                            confidenceBar.classList.add('bg-danger');
+                        }
+                        
+                        document.getElementById('confidenceText').textContent = 
+                            `Verification Confidence: ${confidencePercent}%`;
+                    }
+                    
+                    // Reset for next attendance after delay
+                    setTimeout(() => {
+                        this.resetForNext();
+                    }, 3000);
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+                    confidenceMeter.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = '<div class="alert alert-danger">Network error. Please try again.</div>';
+                confidenceMeter.style.display = 'none';
+            } finally {
+                submitBtn.innerHTML = '<i class="fas fa-check-double"></i> Verify & Mark Attendance';
+                submitBtn.disabled = false;
+            }
+        }
+
+        resetForNext() {
+            this.capturedImageData = null;
+            this.audioBlob = null;
+            document.getElementById('facePreview').style.display = 'none';
+            document.getElementById('voicePreview').style.display = 'none';
+            document.getElementById('audioPlayback').style.display = 'none';
+            document.getElementById('attendanceResult').innerHTML = '';
+            document.getElementById('confidenceMeter').style.display = 'none';
+            this.stopCamera();
+            this.updateSubmitButton();
+        }
+    }
+
+    // Initialize the attendance system when the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        new AttendanceSystem();
+    });
+</script>
+
+<style>
+    .camera-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 300px;
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        color: #6c757d;
+    }
+    
+    .recording-pulse {
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}

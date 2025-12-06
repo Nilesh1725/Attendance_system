@@ -1,10 +1,10 @@
 #Name:- Nilesh singh
 #Roll no:-18
-#Course code:-CAB213
-#Course name:-Applied AI
-#Practical title:-Secauth
+#Course code:-CAB114
+#Course name:-Model Optimization
+#Practical title:-AutoModelTrainer
 #Section:-D2411
-from flask import Flask, render_template, request, jsonify, redirect, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 from flask_mysqldb import MySQL
 import face_recognition
 import cv2
@@ -12,13 +12,19 @@ import numpy as np
 import speech_recognition as sr
 import os
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
+import hashlib
+import json
 from config import config
+import io
 import wave
+import audioop
 from sklearn.metrics.pairwise import cosine_similarity
 import librosa
 import tempfile
+import ssl
 import subprocess
+import shutil
 
 app = Flask(__name__)
 app.config.from_object(config['development'])
@@ -253,18 +259,19 @@ class VoiceVerification:
         try:
             feat1 = np.frombuffer(feature1, dtype=np.float64)
             feat2 = np.frombuffer(feature2, dtype=np.float64)
-
+            
             min_len = min(len(feat1), len(feat2))
             feat1 = feat1[:min_len].reshape(1, -1)
             feat2 = feat2[:min_len].reshape(1, -1)
-
+            
             similarity = cosine_similarity(feat1, feat2)[0][0]
-            print(f"DEBUG - Voice similarity score: {similarity:.3f}")     
+            print(f"DEBUG - Voice similarity score: {similarity:.3f}")
+            
             return similarity
         except Exception as e:
             print(f"DEBUG - Error comparing voice features: {e}")
             return 0
-        
+
 def get_db_connection():
     return mysql.connection
 
